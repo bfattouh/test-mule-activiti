@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:activiti="http://www.mulesoft.org/schema/mule/activiti" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:jms="http://www.mulesoft.org/schema/mule/jms" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="EE-3.5.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/activiti http://www.mulesoft.org/schema/mule/activiti/current/mule-activiti.xsd">
+
+	<spring:beans>
+	    <context:property-placeholder location="classpath:mule-app.properties"/>
+	</spring:beans>
+    
+    <jms:activemq-connector name="Active_MQ" specification="1.1" brokerURL="vm://localhost:61616" validateConnections="true" doc:name="Active MQ"/>
+		
+	<!-- This flow gets the collection of the Activiti server deployments, this may be used by an an admin --> 
+	<!-- to get all deployed business processes....-->	 			
+    <flow name="activiti-Flow1" doc:name="activiti-Flow1">       
+        <http:inbound-endpoint  host="localhost" port="7070" path="test" exchange-pattern="request-response" contentType="application/json" doc:name="HTTP"/>     
+    	<http:outbound-endpoint exchange-pattern="request-response" host="localhost" port="8080" path="activiti-rest/service/repository/deployments" method="GET" doc:name="HTTP" contentType="application/json" password="kermit" user="kermit"/>    	
+    	<logger message="#[payload]" category="INFO" doc:name="Logger"/>
+    </flow>
+    
+    
+    <!-- This flow consumes the message from the inbound JMS queue that is the JSON representing the request   -->
+    <!-- body of the outbound http that invokes the REST endpoint using POST method to start a process instance -->
+    <!-- in Activiti using the processDefinitionKey -->
+    <flow name="activiti-Flow2" doc:name="activiti-Flow2">
+        <jms:inbound-endpoint queue="StartPIQueue" connector-ref="Active_MQ" doc:name="JMS"/>
+        <logger message="####### INPUT PAYLOAD JSON: ######## :  #[payload]" category="INFO" doc:name="Logger"/> 
+<!--         <set-property value="application/json" propertyName="Content-Type" doc:name="Property" />         -->
+    	<http:outbound-endpoint exchange-pattern="request-response" host="localhost" port="8080" 
+    							path="activiti-rest/service/runtime/process-instances" method="POST" 
+    							doc:name="HTTP" contentType="application/json" 
+    							password="${activiti.username}" user="${activiti.password}"/>	
+    	<byte-array-to-string-transformer doc:name="Byte Array to String"/>
+    	<logger message="####### RESPONSE PAYLOAD  ######## :  #[payload]" category="INFO" doc:name="Logger"/>
+    </flow>
+    
+    
+</mule>
